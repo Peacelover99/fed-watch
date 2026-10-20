@@ -166,6 +166,9 @@ def process_indicator(ind: Indicator, src: Source, store: EventStore, cons: pd.D
                 "std": round(std.value, 4), "std_method": std.method,
                 "z": s.z, "hawk_z": s.hawk_z, "label": sp.label(s.hawk_z, cfg.settings.alert_threshold_z),
             })
+            # 预期是后补的、市场反应早已入库时，这里重算"市场是否认同"
+            if existing is not None and _isnum(existing.get("yield_2y_bp")):
+                row["confirmation"] = sp.market_confirmation(s.hawk_z, float(existing["yield_2y_bp"]))
 
         already = existing is not None and str(existing.get("alerted")) in ("True", "true", "1", "sent")
         store.upsert(row)

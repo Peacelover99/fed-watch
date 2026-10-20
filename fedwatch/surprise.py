@@ -111,7 +111,7 @@ class Surprise:
 def compute_surprise(ind: Indicator, actual: float, consensus: float, std: StdEstimate, revision_adj: float = 0.0) -> Surprise:
     raw = round(actual - consensus + (revision_adj if ind.revisions else 0.0), ind.decimals + 2)
     z = raw / std.value
-    return Surprise(raw=raw, z=round(z, 2), hawk_z=round(z * ind.hawkish_sign, 2), std=std)
+    return Surprise(raw=raw, z=round(z, 2) + 0.0, hawk_z=round(z * ind.hawkish_sign, 2) + 0.0, std=std)
 
 
 def label(hawk_z: float, threshold: float) -> str:
