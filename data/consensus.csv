@@ -1,6 +1,27 @@
-# 市场一致预期录入表。每次数据公布前把预期值填进来（来源：财经日历/研报/Trading Economics 等）
+# 市场一致预期录入表。每次数据公布前把预期值填进来（来源：财经日历/研报/新闻）
 # indicator: 对应 config/indicators.yaml 里的 key
 # period:    数据所属期间。月度填 YYYY-MM（如 2026-09 表示 9 月数据）；周度填该周结束的周六 YYYY-MM-DD
-# consensus: 预期值，单位与配置里的 unit 一致（核心CPI 0.3 表示 0.3%；非农 150 表示 15 万人）
-# 示例: core_cpi,2026-09,0.3,Investing.com,
-indicator,period,consensus,source,note
+# consensus: 预期值，单位与配置里的 unit 一致（核心CPI 0.3 表示 0.3%；非农 150 表示 15 万人；初请 220 表示 22 万人）
+# actual:    可选。首次公布值。只有补录历史时才需要填（FRED 上的是修正后的值）；日常录入留空，系统自动抓取
+# revision:  可选。非农前两月修正合计（千人，下修为负）。只有补录历史时才需要填；日常留空，系统自动计算
+indicator,period,consensus,source,actual,revision,note
+cpi,2026-07,0.1,Kiplinger,0.1,,
+cpi,2026-08,0.4,Nowflation,0.4,,
+cpi,2026-09,0.6,Kiplinger,0.6,,预期 0.58% 四舍五入
+core_cpi,2026-07,0.3,Kiplinger,0.2,,
+core_cpi,2026-08,0.2,Nowflation,0.3,,
+core_cpi,2026-09,0.2,Kiplinger,0.3,,
+core_pce,2026-06,0.2,FactSet (Morningstar),0.1,,预期 0.23% 四舍五入
+core_pce,2026-07,0.2,Invezz,0.2,,
+core_pce,2026-08,0.3,Yahoo Finance,0.2,,
+nfp,2026-07,80,FocusEconomics,-23,,
+nfp,2026-08,55,Bloomberg (MUFG),162,,
+nfp,2026-09,84,Yahoo Finance,29,-60,7-8月合计下修 6 万
+unrate,2026-08,4.1,Bloomberg (MUFG),4.1,,
+unrate,2026-09,4.1,Yahoo Finance,4.2,,
+retail,2026-07,0.1,First Trust,-0.6,,
+retail,2026-08,0.8,PNC,1.2,,
+retail,2026-09,0.3,FactSet (ABC News),0.8,,
+claims,2026-09-26,200,investingLive,197,,
+claims,2026-10-03,200,Yahoo Finance,197,,
+claims,2026-10-10,200,investingLive,199,,

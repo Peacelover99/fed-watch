@@ -71,11 +71,13 @@ z           = 意外 ÷ 该指标历史意外的标准差
 预期值是整个系统的关键输入。专业一致预期（彭博、路透）是付费的，所以这一版采用**手工录入**：数据公布前，在 `data/consensus.csv` 加一行。
 
 ```csv
-indicator,period,consensus,source,note
-core_cpi,2026-10,0.3,Investing.com,
-nfp,2026-10,120,Investing.com,
-claims,2026-10-24,225,Investing.com,周度填该周结束的周六
+indicator,period,consensus,source,actual,revision,note
+core_cpi,2026-10,0.3,Investing.com,,,
+nfp,2026-10,120,Investing.com,,,
+claims,2026-10-24,225,Investing.com,,,周度填该周结束的周六
 ```
+
+`actual` 和 `revision` 两列日常**留空**，系统会自动抓首次公布值、自动算非农修正。只有补录历史数据时才需要填，因为 FRED 上的历史值已经被修正过，和当时市场看到的首次公布值不一样。
 
 - 可以直接在 GitHub 网页上编辑这个文件并提交，会自动触发一次重算。
 - 免费的预期值来源：Investing.com / ForexFactory 财经日历、新浪财经·金十数据的日历、各大券商研报。

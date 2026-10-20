@@ -114,8 +114,15 @@ def process_indicator(ind: Indicator, src: Source, store: EventStore, cons: pd.D
     for p in periods:
         label = sp.period_label(p, ind.frequency)
         existing = store.get(ind.key, label)
-        actual = float(t[p])
         c = find_consensus(cons, ind.key, label)
+        # 实际值以"首次公布值"为准：手工填了就用手工值；否则沿用第一次抓到的值，
+        # 避免下个月数据被修正后，历史意外被悄悄改掉
+        if c is not None and c.get("actual") is not None:
+            actual = c["actual"]
+        elif existing is not None and _isnum(existing.get("actual")):
+            actual = float(existing["actual"])
+        else:
+            actual = float(t[p])
 
         # 公布日：有 API key 时用官方日期；否则只有"和上次快照相比新出现的数据"才算今天公布。
         # 第一次运行（还没有快照）只做初始化，不把已有数据误当成今天的新数据。
@@ -130,7 +137,9 @@ def process_indicator(ind: Indicator, src: Source, store: EventStore, cons: pd.D
 
         # 前值修正：只在新数据公布时、且有上次快照时可算
         rev = 0.0
-        if ind.revisions and is_new and old_raw is not None:
+        if c is not None and c.get("revision") is not None:
+            rev = c["revision"]
+        elif ind.revisions and is_new and old_raw is not None:
             prior = [x for x in t.index if x < p][-2:]
             rev = sp.revision(old_raw, raw, ind, prior)
         elif existing is not None and _isnum(existing.get("revision")):
@@ -151,9 +160,9 @@ def process_indicator(ind: Indicator, src: Source, store: EventStore, cons: pd.D
         else:
             past = store.past_surprises(ind.key, label)
             std = sp.surprise_std(ind, past, t[t.index < p], cfg.settings.min_history)
-            s = sp.compute_surprise(ind, actual, c[0], std, rev)
+            s = sp.compute_surprise(ind, actual, c["consensus"], std, rev)
             row.update({
-                "consensus": c[0], "consensus_source": c[1], "surprise": s.raw,
+                "consensus": c["consensus"], "consensus_source": c["source"], "surprise": s.raw,
                 "std": round(std.value, 4), "std_method": std.method,
                 "z": s.z, "hawk_z": s.hawk_z, "label": sp.label(s.hawk_z, cfg.settings.alert_threshold_z),
             })

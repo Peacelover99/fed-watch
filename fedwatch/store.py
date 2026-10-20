@@ -21,7 +21,7 @@ EVENT_COLUMNS = [
 def load_consensus(path: Path = DATA_DIR / "consensus.csv") -> pd.DataFrame:
     """读取手工录入的一致预期。period 统一成 YYYY-MM 或 YYYY-MM-DD 字符串。"""
     if not path.exists():
-        return pd.DataFrame(columns=["indicator", "period", "consensus", "source", "note"])
+        return pd.DataFrame(columns=["indicator", "period", "consensus", "source", "actual", "revision", "note"])
     df = pd.read_csv(path, comment="#", dtype={"period": str, "indicator": str})
     df = df.dropna(subset=["indicator", "period", "consensus"])
     df["indicator"] = df["indicator"].str.strip()
@@ -30,13 +30,20 @@ def load_consensus(path: Path = DATA_DIR / "consensus.csv") -> pd.DataFrame:
     return df.dropna(subset=["consensus"])
 
 
-def find_consensus(cons: pd.DataFrame, indicator: str, period_label: str) -> Optional[tuple[float, str]]:
+def find_consensus(cons: pd.DataFrame, indicator: str, period_label: str) -> Optional[dict]:
+    """返回 {consensus, source, actual, revision}；actual / revision 是可选列，没填为 None。"""
     row = cons[(cons["indicator"] == indicator) & (cons["period"] == period_label)]
     if row.empty:
         return None
     r = row.iloc[-1]
     src = r.get("source")
-    return float(r["consensus"]), (str(src) if isinstance(src, str) else "")
+
+    def opt(name):
+        v = pd.to_numeric(r.get(name), errors="coerce") if name in r.index else float("nan")
+        return None if pd.isna(v) else float(v)
+
+    return {"consensus": float(r["consensus"]), "source": str(src) if isinstance(src, str) else "",
+            "actual": opt("actual"), "revision": opt("revision")}
 
 
 # ---------- 事件表 ----------
