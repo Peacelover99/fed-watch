@@ -71,6 +71,9 @@ class EventStore:
         if m.any():
             idx = self.df[m].index[-1]
             for k, v in row.items():
+                # 从 CSV 读回时，全空的列会被推断成 float；写入文字前先转成 object
+                if isinstance(v, str) and self.df[k].dtype != object:
+                    self.df[k] = self.df[k].astype(object)
                 self.df.at[idx, k] = v
         else:
             full = {c: row.get(c, pd.NA) for c in EVENT_COLUMNS}

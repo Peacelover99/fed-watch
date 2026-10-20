@@ -81,6 +81,20 @@ class SurpriseTests(unittest.TestCase):
         self.assertIsNone(sp.analogs(ev, 0.5, 1.5))
 
 
+class StoreTests(unittest.TestCase):
+    def test_upsert_text_into_empty_column_after_reload(self):
+        import tempfile
+        from pathlib import Path
+        from fedwatch.store import EventStore
+        p = Path(tempfile.mkdtemp()) / "e.csv"
+        s = EventStore(p)
+        s.upsert({"indicator": "cpi", "period": "2026-09", "actual": 0.6})
+        s.save()
+        s2 = EventStore(p)  # consensus_source / label 等列读回来是全空 float
+        s2.upsert({"indicator": "cpi", "period": "2026-09", "consensus_source": "Kiplinger", "label": "符合预期"})
+        self.assertEqual(s2.get("cpi", "2026-09")["consensus_source"], "Kiplinger")
+
+
 class DemoPipelineTest(unittest.TestCase):
     def test_demo_runs_end_to_end(self):
         import tempfile
