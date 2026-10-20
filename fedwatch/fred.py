@@ -19,7 +19,12 @@ CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv"
 
 class FredClient:
     def __init__(self, api_key: Optional[str] = None, session: Optional[requests.Session] = None):
-        self.api_key = api_key if api_key is not None else os.environ.get("FRED_API_KEY") or None
+        key = api_key if api_key is not None else os.environ.get("FRED_API_KEY", "")
+        # 容错：去掉复制时常带进来的空格、换行、引号，以及 "api_key=" 前缀
+        key = key.strip().strip("\"'").strip()
+        if key.lower().startswith("api_key="):
+            key = key[8:]
+        self.api_key = key.lower() or None
         self.session = session or requests.Session()
         self._release_cache: dict[str, list[pd.Timestamp]] = {}
 
