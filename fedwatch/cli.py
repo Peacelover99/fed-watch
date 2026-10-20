@@ -105,12 +105,30 @@ def _console(title: str, body: str) -> dict:
 
 
 def cmd_test_notify(args) -> int:
+    import os
+    gha = os.environ.get("GITHUB_ACTIONS") == "true"
     chs = notify.channels()
     if not chs:
-        print("没有配置任何推送渠道，请设置环境变量（见 README）")
+        msg = "没有配置任何推送渠道：请在仓库 Settings → Secrets 添加 SERVERCHAN_KEY 等（见 README）"
+        print(f"::error title=推送测试::{msg}" if gha else msg)
         return 1
-    res = notify.send("✅ Fed Watch 推送测试", "如果你看到这条消息，说明推送渠道配置成功。")
-    print(res)
+    # 用最近一次真实事件生成一条样例提醒，让你看到正式推送的样子
+    from .pipeline import format_alert
+    cfg = load_config()
+    df = EventStore().df
+    scored = df.dropna(subset=["hawk_z"]).sort_values("release_date")
+    if not scored.empty:
+        r = scored.iloc[-1].to_dict()
+        ind = cfg.indicators[r["indicator"]]
+        title, body = format_alert(ind, r, cfg, df)
+        res = notify.send("[样例] " + title, "以下是用最近一次数据生成的样例，并非实时提醒。\n\n" + body)
+    else:
+        res = notify.send("✅ Fed Watch 推送测试", "如果你看到这条消息，说明推送渠道配置成功。")
+    for ch, v in res.items():
+        line = f"{ch}: {v}"
+        if gha:
+            print(f"::{'notice' if v == 'ok' else 'error'} title=推送测试::{line}")
+        print(line)
     return 0 if all(v == "ok" for v in res.values()) else 1
 
 

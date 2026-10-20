@@ -16,7 +16,7 @@ import requests
 
 
 def _env(name: str) -> str:
-    return os.environ.get(name, "").strip()
+    return os.environ.get(name, "").strip().strip("\"'").strip()
 
 
 def channels() -> list[str]:
@@ -41,15 +41,33 @@ def send(title: str, body_md: str) -> dict[str, str]:
             {"serverchan": _serverchan, "wecom": _wecom, "telegram": _telegram, "email": _email}[ch](title, body_md)
             results[ch] = "ok"
         except Exception as e:  # noqa: BLE001 - 推送失败只记录
-            results[ch] = f"失败: {e}"
-            print(f"[推送失败] {ch}: {e}")
+            results[ch] = f"失败: {_safe_error(e)}"
+            print(f"[推送失败] {ch}: {_safe_error(e)}")
     return results
+
+
+def _safe_error(e: Exception) -> str:
+    """错误信息里常带完整 URL（Server酱 / Telegram 的密钥就在 URL 里），只保留不含密钥的部分。"""
+    if isinstance(e, requests.HTTPError) and e.response is not None:
+        return f"HTTP {e.response.status_code} {e.response.text[:150]}"
+    if isinstance(e, requests.RequestException):
+        return f"网络错误 {type(e).__name__}"
+    return str(e)[:200]
 
 
 def _serverchan(title: str, body: str) -> None:
     key = _env("SERVERCHAN_KEY")
-    r = requests.post(f"https://sctapi.ftqq.com/{key}.send", data={"title": title[:32], "desp": body}, timeout=15)
+    host = "sctapi.ftqq.com"
+    if key.startswith("sctp"):  # Server酱³ 的 key 用另一个域名
+        import re
+        m = re.match(r"sctp(\d+)t", key)
+        host = f"{m.group(1)}.push.ft07.com" if m else host
+    r = requests.post(f"https://{host}/send/{key}.send" if host != "sctapi.ftqq.com" else f"https://{host}/{key}.send",
+                      data={"title": title[:32], "desp": body}, timeout=15)
     r.raise_for_status()
+    data = r.json()
+    if data.get("code", 0) != 0:
+        raise RuntimeError(f"Server酱返回错误: {data.get('message') or data}")
 
 
 def _wecom(title: str, body: str) -> None:

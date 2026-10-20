@@ -8,6 +8,11 @@ on:
     # 每天北京时间早上补一次（补前一日收盘的市场反应）
     - cron: "17 23 * * 0-4"
   workflow_dispatch:   # 也可以在 Actions 页面手动点 Run
+    inputs:
+      test_notify:
+        description: "只发送一条测试推送（检查微信等渠道是否配置成功）"
+        type: boolean
+        default: false
   push:
     paths:
       - "data/consensus.csv"   # 录入新预期后自动重算
@@ -33,7 +38,22 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      - name: 推送测试
+        if: ${{ inputs.test_notify }}
+        env:
+          SERVERCHAN_KEY: ${{ secrets.SERVERCHAN_KEY }}
+          WECOM_WEBHOOK: ${{ secrets.WECOM_WEBHOOK }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+        run: python -m fedwatch test-notify
+
       - name: 运行监控
+        if: ${{ !inputs.test_notify }}
         env:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
           SERVERCHAN_KEY: ${{ secrets.SERVERCHAN_KEY }}
@@ -48,6 +68,7 @@ jobs:
         run: python -m fedwatch run
 
       - name: 保存数据和面板
+        if: ${{ !inputs.test_notify }}
         run: |
           git config user.name "fedwatch-bot"
           git config user.email "fedwatch-bot@users.noreply.github.com"
