@@ -145,7 +145,7 @@ def process_indicator(ind: Indicator, src: Source, store: EventStore, cons: pd.D
 
         if c is None:
             row.update({"consensus": pd.NA, "label": "未录入预期"})
-            if fresh and (existing is None or existing.get("alerted") != "missing_notified"):
+            if fresh and (existing is None or str(existing.get("alerted")) != "missing_notified"):
                 report.missing_consensus.append(f"{ind.name} {label}")
                 row["alerted"] = "missing_notified"
         else:
@@ -201,7 +201,7 @@ def refresh_market(store: EventStore, src: Source, cfg: Config, send: Optional[S
         upd["confirmation"] = sp.market_confirmation(float(hz), bp) if _isnum(hz) else "-"
         store.upsert(upd)
         # 刚推送过的大意外，收盘后补一条"市场是否认同"
-        if send is not None and r.get("alerted") == "sent" and _isnum(hz) \
+        if send is not None and str(r.get("alerted")) == "sent" and _isnum(hz) \
                 and abs(float(hz)) >= cfg.settings.alert_threshold_z:
             ind = cfg.indicators.get(r["indicator"])
             if ind:
