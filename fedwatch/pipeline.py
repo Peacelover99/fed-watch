@@ -117,13 +117,14 @@ def process_indicator(ind: Indicator, src: Source, store: EventStore, cons: pd.D
         actual = float(t[p])
         c = find_consensus(cons, ind.key, label)
 
-        # 公布日：有 API key 时用官方日期；否则新出现的数据用"今天"，老数据留空
+        # 公布日：有 API key 时用官方日期；否则只有"和上次快照相比新出现的数据"才算今天公布。
+        # 第一次运行（还没有快照）只做初始化，不把已有数据误当成今天的新数据。
         rel = sp.release_date_for(p, ind.frequency, rdates) if rdates else None
         is_new = old_raw is not None and p not in old_raw.index
         if rel is None:
             if existing is not None and isinstance(existing.get("release_date"), str):
                 rel = pd.Timestamp(existing["release_date"])
-            elif p == latest and (is_new or old_raw is None):
+            elif p == latest and is_new:
                 rel = today
         fresh = rel is not None and (today - rel).days <= 3 and rel <= today
 

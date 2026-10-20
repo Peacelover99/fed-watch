@@ -24,19 +24,34 @@ class FredClient:
         self._release_cache: dict[str, list[pd.Timestamp]] = {}
 
     def _get(self, url: str, params: dict) -> requests.Response:
-        last_err: Exception | None = None
+        last_err = ""
+        endpoint = url.replace(API, "").replace(CSV, "fredgraph.csv")
         for attempt in range(3):
             try:
                 r = self.session.get(url, params=params, timeout=30)
-                if r.status_code == 429:  # 限流，稍等再试
-                    time.sleep(2 * (attempt + 1))
-                    continue
-                r.raise_for_status()
-                return r
             except requests.RequestException as e:
-                last_err = e
+                # 网络错误信息里可能带完整 URL（含 api_key），只保留异常类型
+                last_err = f"网络错误 {type(e).__name__}"
                 time.sleep(1 + attempt)
-        raise RuntimeError(f"请求 FRED 失败: {url} {params.get('series_id', '')}: {last_err}")
+                continue
+            if r.status_code == 429:  # 限流，稍等再试
+                last_err = "HTTP 429 限流"
+                time.sleep(2 * (attempt + 1))
+                continue
+            if r.status_code >= 400:
+                try:
+                    msg = r.json().get("error_message", "")
+                except ValueError:
+                    msg = r.text[:200]
+                last_err = f"HTTP {r.status_code} {msg}".strip()
+                if r.status_code < 500:  # 4xx（如 key 无效）重试没用
+                    break
+                time.sleep(1 + attempt)
+                continue
+            return r
+        hint = "（请检查 FRED_API_KEY 是否正确：32 位小写字母和数字，不要带空格或引号）" \
+            if "api_key" in last_err.lower() else ""
+        raise RuntimeError(f"FRED {endpoint} {params.get('series_id', '')}: {last_err}{hint}")
 
     def series(self, series_id: str, start: str = "2000-01-01") -> pd.Series:
         """返回以观测日期为索引的 float 序列，缺失值已去掉。"""

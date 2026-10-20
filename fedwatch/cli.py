@@ -27,9 +27,22 @@ def _today_et() -> pd.Timestamp:
 
 
 def _print_report(rep) -> None:
+    import os
     print(f"处理 {rep.processed} 条；推送 {len(rep.alerts)} 条")
     for e in rep.errors:
         print("  错误:", e)
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        # 错误显示在 Actions 运行页面的 Annotations 里，不用点进日志
+        for e in rep.errors:
+            print(f"::error title=Fed Watch::{e}")
+        summary = os.environ.get("GITHUB_STEP_SUMMARY")
+        if summary:
+            with open(summary, "a", encoding="utf-8") as f:
+                f.write(f"### Fed Watch\n\n处理 {rep.processed} 条，推送 {len(rep.alerts)} 条\n\n")
+                for a in rep.alerts:
+                    f.write(f"- {a}\n")
+                if rep.errors:
+                    f.write("\n**错误**\n\n" + "".join(f"- {e}\n" for e in rep.errors))
     if rep.errors and rep.processed == 0:
         print("（全部失败，请检查网络或 FRED_API_KEY）")
     elif rep.errors:
