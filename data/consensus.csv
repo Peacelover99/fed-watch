@@ -1,0 +1,6 @@
+# 市场一致预期录入表。每次数据公布前把预期值填进来（来源：财经日历/研报/Trading Economics 等）
+# indicator: 对应 config/indicators.yaml 里的 key
+# period:    数据所属期间。月度填 YYYY-MM（如 2026-09 表示 9 月数据）；周度填该周结束的周六 YYYY-MM-DD
+# consensus: 预期值，单位与配置里的 unit 一致（核心CPI 0.3 表示 0.3%；非农 150 表示 15 万人）
+# 示例: core_cpi,2026-09,0.3,Investing.com,
+indicator,period,consensus,source,note

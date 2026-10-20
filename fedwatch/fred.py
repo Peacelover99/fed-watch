@@ -1,0 +1,82 @@
+"""FRED 数据客户端。
+
+有 FRED_API_KEY（免费申请：https://fred.stlouisfed.org/docs/api/api_key.html）时走官方 API，
+还能拿到每期数据的「首次公布日期」；没有 key 时退回到无需认证的 CSV 下载，但没有公布日期。
+"""
+from __future__ import annotations
+
+import io
+import os
+import time
+from typing import Optional
+
+import pandas as pd
+import requests
+
+API = "https://api.stlouisfed.org/fred"
+CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv"
+
+
+class FredClient:
+    def __init__(self, api_key: Optional[str] = None, session: Optional[requests.Session] = None):
+        self.api_key = api_key if api_key is not None else os.environ.get("FRED_API_KEY") or None
+        self.session = session or requests.Session()
+        self._release_cache: dict[str, list[pd.Timestamp]] = {}
+
+    def _get(self, url: str, params: dict) -> requests.Response:
+        last_err: Exception | None = None
+        for attempt in range(3):
+            try:
+                r = self.session.get(url, params=params, timeout=30)
+                if r.status_code == 429:  # 限流，稍等再试
+                    time.sleep(2 * (attempt + 1))
+                    continue
+                r.raise_for_status()
+                return r
+            except requests.RequestException as e:
+                last_err = e
+                time.sleep(1 + attempt)
+        raise RuntimeError(f"请求 FRED 失败: {url} {params.get('series_id', '')}: {last_err}")
+
+    def series(self, series_id: str, start: str = "2000-01-01") -> pd.Series:
+        """返回以观测日期为索引的 float 序列，缺失值已去掉。"""
+        if self.api_key:
+            r = self._get(
+                f"{API}/series/observations",
+                {"series_id": series_id, "api_key": self.api_key, "file_type": "json",
+                 "observation_start": start},
+            )
+            obs = r.json()["observations"]
+            s = pd.Series(
+                [float(o["value"]) if o["value"] not in (".", "") else float("nan") for o in obs],
+                index=pd.to_datetime([o["date"] for o in obs]),
+                name=series_id,
+            )
+        else:
+            r = self._get(CSV, {"id": series_id, "cosd": start})
+            df = pd.read_csv(io.StringIO(r.text))
+            date_col = df.columns[0]  # 'observation_date' 或旧版 'DATE'
+            s = pd.Series(
+                pd.to_numeric(df[series_id], errors="coerce").values,
+                index=pd.to_datetime(df[date_col]),
+                name=series_id,
+            )
+        return s.dropna().sort_index()
+
+    def release_dates(self, series_id: str) -> list[pd.Timestamp]:
+        """该序列所属发布（如 CPI 报告）的历次公布日期。没有 API key 时返回空列表。"""
+        if not self.api_key:
+            return []
+        if series_id in self._release_cache:
+            return self._release_cache[series_id]
+        r = self._get(f"{API}/series/release",
+                      {"series_id": series_id, "api_key": self.api_key, "file_type": "json"})
+        release_id = r.json()["releases"][0]["id"]
+        r = self._get(
+            f"{API}/release/dates",
+            {"release_id": release_id, "api_key": self.api_key, "file_type": "json",
+             "include_release_dates_with_no_data": "false", "sort_order": "asc", "limit": 10000},
+        )
+        dates = sorted(pd.Timestamp(d["date"]) for d in r.json()["release_dates"])
+        self._release_cache[series_id] = dates
+        return dates

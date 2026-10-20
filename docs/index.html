@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fed Watch 预期差面板</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.35.3/plotly.min.js"></script>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f5f4f1; --surface: #fcfcfb; --border: #e3e2dd;
+  --text: #0b0b0b; --text-2: #52514e; --text-3: #7d7c77;
+  --grid: #ebeae6; --zero: #b9b8b2;
+  --hawk: #d03b3b; --hawk-soft: rgba(208,59,59,.14);
+  --dove: #2a78d6; --dove-soft: rgba(42,120,214,.14);
+  --neutral: #9a9993; --line: #0b0b0b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #111110; --surface: #1a1a19; --border: #2e2e2c;
+    --text: #f0efec; --text-2: #c3c2b7; --text-3: #8f8e86;
+    --grid: #2a2a28; --zero: #5a5a56;
+    --hawk: #e66767; --hawk-soft: rgba(230,103,103,.18);
+    --dove: #3987e5; --dove-soft: rgba(57,135,229,.2);
+    --neutral: #7d7c77; --line: #f0efec;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111110; --surface: #1a1a19; --border: #2e2e2c;
+  --text: #f0efec; --text-2: #c3c2b7; --text-3: #8f8e86;
+  --grid: #2a2a28; --zero: #5a5a56;
+  --hawk: #e66767; --hawk-soft: rgba(230,103,103,.18);
+  --dove: #3987e5; --dove-soft: rgba(57,135,229,.2);
+  --neutral: #7d7c77; --line: #f0efec;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 24px 16px 48px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; margin-bottom: 20px; }
+h1 { font-size: 22px; margin: 0; letter-spacing: -.01em; }
+.meta { color: var(--text-3); font-size: 13px; }
+.badge { font-size: 12px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--border); color: var(--text-2); }
+.grid { display: grid; gap: 12px; grid-template-columns: repeat(12, 1fr); }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; min-width: 0; }
+.span-3 { grid-column: span 3; } .span-4 { grid-column: span 4; } .span-5 { grid-column: span 5; }
+.span-6 { grid-column: span 6; } .span-7 { grid-column: span 7; } .span-8 { grid-column: span 8; } .span-12 { grid-column: span 12; }
+@media (max-width: 900px) { .span-3 { grid-column: span 6; } .span-4,.span-5,.span-6,.span-7,.span-8 { grid-column: span 12; } }
+@media (max-width: 520px) { .span-3 { grid-column: span 12; } }
+h2 { font-size: 15px; margin: 0 0 2px; }
+.sub { color: var(--text-3); font-size: 12px; margin: 0 0 10px; }
+.kpi-label { color: var(--text-2); font-size: 12px; }
+.kpi-value { font-size: 28px; font-weight: 600; margin: 4px 0 2px; font-variant-numeric: tabular-nums; }
+.kpi-note { font-size: 12px; color: var(--text-3); }
+.tag { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 500; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.hawk { color: var(--hawk); } .dove { color: var(--dove); }
+.chart { width: 100%; height: 300px; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+th { text-align: left; font-weight: 500; color: var(--text-3); font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+td { padding: 7px 8px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+td.num, th.num { text-align: right; }
+.zbar { display: inline-flex; align-items: center; gap: 6px; }
+.zbar .track { position: relative; width: 70px; height: 8px; }
+.zbar .track::before { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--zero); }
+.zbar .fill { position: absolute; top: 0; height: 8px; border-radius: 2px; }
+.empty { color: var(--text-3); padding: 24px 0; text-align: center; }
+footer { margin-top: 20px; color: var(--text-3); font-size: 12px; }
+.legend { display: flex; gap: 14px; font-size: 12px; color: var(--text-2); margin-bottom: 4px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Fed Watch · 预期差面板</h1>
+    <span class="meta" id="updated"></span>
+    <span class="badge" id="demo-badge" hidden>演示数据</span>
+  </header>
+
+  <div class="grid">
+    <div class="card span-3">
+      <div class="kpi-label">合成意外指数</div>
+      <div class="kpi-value" id="k-index">–</div>
+      <div class="kpi-note" id="k-index-note"></div>
+    </div>
+    <div class="card span-3">
+      <div class="kpi-label">最近一次数据</div>
+      <div class="kpi-value" id="k-last">–</div>
+      <div class="kpi-note" id="k-last-note"></div>
+    </div>
+    <div class="card span-3">
+      <div class="kpi-label">近 90 天大意外</div>
+      <div class="kpi-value" id="k-big">–</div>
+      <div class="kpi-note" id="k-big-note"></div>
+    </div>
+    <div class="card span-3">
+      <div class="kpi-label">市场确认率</div>
+      <div class="kpi-value" id="k-conf">–</div>
+      <div class="kpi-note" id="k-conf-note"></div>
+    </div>
+
+    <div class="card span-8">
+      <h2>合成意外指数</h2>
+      <p class="sub">各项数据鹰派 z 的时间衰减加权平均。高于 0：数据整体强于预期（偏鹰，降息预期可能后移）</p>
+      <div class="legend"><span class="tag"><span class="dot" style="background:var(--hawk)"></span>偏鹰</span><span class="tag"><span class="dot" style="background:var(--dove)"></span>偏鸽</span></div>
+      <div id="c-index" class="chart"></div>
+    </div>
+    <div class="card span-4">
+      <h2>各指标最新意外</h2>
+      <p class="sub">鹰派 z，虚线为提醒阈值 ±<span class="thr"></span>σ</p>
+      <div id="c-latest" class="chart"></div>
+    </div>
+
+    <div class="card span-12">
+      <h2>最近公布</h2>
+      <p class="sub">意外 = 实际 − 预期（非农含前值修正）；市场反应为公布当日收盘变动</p>
+      <div class="table-wrap"><table id="t-recent"></table></div>
+    </div>
+
+    <div class="card span-6">
+      <h2>意外 vs 2 年美债反应</h2>
+      <p class="sub" id="scatter-sub">每个点是一次数据公布。右上、左下象限 = 市场认同意外方向</p>
+      <div id="c-scatter" class="chart" style="height:340px"></div>
+    </div>
+    <div class="card span-6">
+      <h2>历史同类意外后的表现</h2>
+      <p class="sub">|z| ≥ <span class="thr"></span>σ 的事件，公布当日平均变动</p>
+      <div class="table-wrap"><table id="t-analog"></table></div>
+    </div>
+  </div>
+  <footer>数据来源：FRED（圣路易斯联储）、手工录入的市场一致预期。仅供研究参考，不构成投资建议。</footer>
+</div>
+
+<script>
+const D = {"updated": "2026-10-20 21:04", "threshold": 1.5, "index_now": null, "index_30d_ago": null, "last_event": null, "big90": {"hawk": 0, "dove": 0}, "confirm_rate": null, "confirm_n": 0, "index": [], "latest": [], "recent": [], "scatter": [], "corr": null, "analogs": [{"name": "核心CPI 环比", "hawk": null, "dove": null}, {"name": "CPI 环比", "hawk": null, "dove": null}, {"name": "核心PCE 环比", "hawk": null, "dove": null}, {"name": "非农新增就业", "hawk": null, "dove": null}, {"name": "失业率", "hawk": null, "dove": null}, {"name": "零售销售 环比", "hawk": null, "dove": null}, {"name": "初请失业金人数", "hawk": null, "dove": null}], "n_events": 0, "demo": false};
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmtZ = z => z == null ? "–" : (z > 0 ? "+" : "") + z.toFixed(2);
+const sideCls = z => z > 0 ? "hawk" : z < 0 ? "dove" : "";
+const sideTxt = z => z >= D.threshold ? "鹰派意外" : z <= -D.threshold ? "鸽派意外" : Math.abs(z) >= D.threshold / 2 ? (z > 0 ? "轻度偏鹰" : "轻度偏鸽") : "符合预期";
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+$("updated").textContent = "更新于 " + D.updated + "（北京时间）· 共 " + D.n_events + " 条事件";
+$("demo-badge").hidden = !D.demo;
+document.querySelectorAll(".thr").forEach(e => e.textContent = D.threshold);
+
+// ---- 指标卡 ----
+function kpis() {
+  if (D.index_now != null) {
+    $("k-index").innerHTML = `<span class="${sideCls(D.index_now)}">${fmtZ(D.index_now)}</span>`;
+    const d = D.index_30d_ago == null ? "" : `30 天前 ${fmtZ(D.index_30d_ago)}，` ;
+    $("k-index-note").textContent = d + (D.index_now > 0.25 ? "近期数据偏强" : D.index_now < -0.25 ? "近期数据偏弱" : "大体符合预期");
+  }
+  if (D.last_event) {
+    const e = D.last_event;
+    $("k-last").innerHTML = `<span class="${sideCls(e.hawk_z)}">${fmtZ(e.hawk_z)}σ</span>`;
+    $("k-last-note").textContent = `${e.name} · ${e.date} · ${e.label}`;
+  }
+  $("k-big").innerHTML = `<span class="hawk">${D.big90.hawk}</span> <span style="color:var(--text-3);font-weight:400">/</span> <span class="dove">${D.big90.dove}</span>`;
+  $("k-big-note").textContent = `鹰派 / 鸽派，|z| ≥ ${D.threshold}σ`;
+  if (D.confirm_rate != null) {
+    $("k-conf").textContent = Math.round(D.confirm_rate * 100) + "%";
+    $("k-conf-note").textContent = `${D.confirm_n} 次大意外中，2 年美债同向变动的比例`;
+  } else {
+    $("k-conf-note").textContent = "大意外样本不足 5 次";
+  }
+}
+
+// ---- 图表 ----
+function baseLayout(extra) {
+  return Object.assign({
+    paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+    font: { color: css("--text-2"), size: 12, family: getComputedStyle(document.body).fontFamily },
+    margin: { l: 44, r: 12, t: 8, b: 32 }, showlegend: false,
+    hoverlabel: { bgcolor: css("--surface"), bordercolor: css("--border"), font: { color: css("--text") } },
+    xaxis: { gridcolor: css("--grid"), zeroline: false, linecolor: css("--border"), tickcolor: css("--border") },
+    yaxis: { gridcolor: css("--grid"), zerolinecolor: css("--zero"), zerolinewidth: 1, linecolor: css("--border") },
+  }, extra);
+}
+const cfg = { displayModeBar: false, responsive: true };
+
+function chartIndex() {
+  if (!D.index.length) { $("c-index").innerHTML = '<div class="empty">暂无数据：录入预期并运行后显示</div>'; return; }
+  const x = D.index.map(p => p[0]), y = D.index.map(p => p[1]);
+  const pos = y.map(v => v > 0 ? v : 0), neg = y.map(v => v < 0 ? v : 0);
+  Plotly.newPlot("c-index", [
+    { x, y: pos, type: "scatter", mode: "lines", line: { width: 0 }, fill: "tozeroy", fillcolor: css("--hawk-soft"), hoverinfo: "skip" },
+    { x, y: neg, type: "scatter", mode: "lines", line: { width: 0 }, fill: "tozeroy", fillcolor: css("--dove-soft"), hoverinfo: "skip" },
+    { x, y, type: "scatter", mode: "lines", line: { color: css("--line"), width: 2 },
+      hovertemplate: "%{x}<br>意外指数 %{y:+.2f}<extra></extra>" },
+  ], baseLayout({ hovermode: "x unified", yaxis: { gridcolor: css("--grid"), zerolinecolor: css("--zero"), title: { text: "σ", standoff: 4 } } }), cfg);
+}
+
+function chartLatest() {
+  if (!D.latest.length) { $("c-latest").innerHTML = '<div class="empty">暂无数据</div>'; return; }
+  const rows = [...D.latest].reverse();
+  const lim = Math.max(D.threshold * 1.4, ...rows.map(r => Math.abs(r.hawk_z))) * 1.1;
+  Plotly.newPlot("c-latest", [{
+    type: "bar", orientation: "h", y: rows.map(r => r.name), x: rows.map(r => r.hawk_z),
+    marker: { color: rows.map(r => r.hawk_z >= 0 ? css("--hawk") : css("--dove")) },
+    customdata: rows.map(r => [r.period, r.date, sideTxt(r.hawk_z)]),
+    hovertemplate: "%{y}（%{customdata[0]}）<br>鹰派 z %{x:+.2f} · %{customdata[2]}<br>公布 %{customdata[1]}<extra></extra>",
+    width: 0.55,
+  }], baseLayout({
+    margin: { l: 96, r: 12, t: 8, b: 32 }, bargap: 0.3,
+    xaxis: { range: [-lim, lim], gridcolor: css("--grid"), zerolinecolor: css("--zero"), zerolinewidth: 1 },
+    yaxis: { gridcolor: "rgba(0,0,0,0)", automargin: true },
+    shapes: [-1, 1].map(s => ({ type: "line", x0: s * D.threshold, x1: s * D.threshold, y0: -0.5, y1: rows.length - 0.5,
+      line: { color: css("--text-3"), width: 1, dash: "dot" } })),
+  }), cfg);
+}
+
+function chartScatter() {
+  if (!D.scatter.length) { $("c-scatter").innerHTML = '<div class="empty">收盘后有市场数据才会显示</div>'; return; }
+  if (D.corr != null) $("scatter-sub").textContent += `。相关系数 ${D.corr}`;
+  Plotly.newPlot("c-scatter", [{
+    type: "scatter", mode: "markers", x: D.scatter.map(p => p.z), y: D.scatter.map(p => p.bp),
+    marker: { size: 8, color: D.scatter.map(p => p.z >= 0 ? css("--hawk") : css("--dove")), opacity: 0.75,
+      line: { color: css("--surface"), width: 1 } },
+    customdata: D.scatter.map(p => [p.name, p.date]),
+    hovertemplate: "%{customdata[0]} · %{customdata[1]}<br>鹰派 z %{x:+.2f}<br>2年美债 %{y:+.1f}bp<extra></extra>",
+  }], baseLayout({
+    xaxis: { title: { text: "鹰派 z（σ）" }, gridcolor: css("--grid"), zerolinecolor: css("--zero"), zerolinewidth: 1 },
+    yaxis: { title: { text: "2 年美债变动（bp）" }, gridcolor: css("--grid"), zerolinecolor: css("--zero"), zerolinewidth: 1 },
+    margin: { l: 56, r: 12, t: 8, b: 44 },
+  }), cfg);
+}
+
+// ---- 表格 ----
+function zbar(z) {
+  if (z == null) return "–";
+  const lim = 3, w = Math.min(Math.abs(z), lim) / lim * 35;
+  const left = z >= 0 ? 35 : 35 - w;
+  return `<span class="zbar"><span class="track"><span class="fill" style="left:${left}px;width:${Math.max(w,1)}px;background:var(${z >= 0 ? "--hawk" : "--dove"})"></span></span><span>${fmtZ(z)}</span></span>`;
+}
+const sgn = (v, d, u) => v == null ? "–" : (v > 0 ? "+" : "") + (v === 0 ? 0 : v).toFixed(d) + u;
+
+function tableRecent() {
+  const t = $("t-recent");
+  if (!D.recent.length) { t.innerHTML = '<tr><td class="empty">暂无数据</td></tr>'; return; }
+  t.innerHTML = `<thead><tr><th>公布日</th><th>指标</th><th>期间</th><th class="num">实际</th><th class="num">预期</th>
+    <th class="num">意外</th><th>鹰派 z</th><th>判断</th><th class="num">2年美债</th><th class="num">标普</th><th>市场</th></tr></thead><tbody>` +
+    D.recent.map(r => `<tr><td>${r.date}</td><td>${esc(r.name)}</td><td>${esc(r.period)}</td>
+      <td class="num">${r.actual ?? "–"}</td><td class="num">${r.consensus ?? "–"}</td><td class="num">${r.surprise ?? "–"}</td>
+      <td>${zbar(r.hawk_z)}</td><td class="${r.hawk_z != null && Math.abs(r.hawk_z) >= D.threshold ? sideCls(r.hawk_z) : ""}">${esc(r.label)}</td>
+      <td class="num">${sgn(r.y2, 1, "bp")}</td><td class="num">${sgn(r.spx, 2, "%")}</td><td>${esc(r.conf) || "–"}</td></tr>`).join("") + "</tbody>";
+}
+
+function tableAnalog() {
+  const t = $("t-analog");
+  const cell = s => s == null ? '<td class="num" colspan="2" style="color:var(--text-3)">样本不足</td>'
+    : `<td class="num">${sgn(s.bp, 1, "bp")}</td><td class="num">${sgn(s.spx, 2, "%")}<div style="color:var(--text-3);font-size:11px">${s.n} 次 · 跌 ${Math.round(s.down*100)}%</div></td>`;
+  t.innerHTML = `<thead><tr><th></th><th class="num hawk" colspan="2">鹰派意外后</th><th class="num dove" colspan="2">鸽派意外后</th></tr>
+    <tr><th>指标</th><th class="num">2年美债</th><th class="num">标普</th><th class="num">2年美债</th><th class="num">标普</th></tr></thead><tbody>` +
+    D.analogs.map(r => `<tr><td>${esc(r.name)}</td>${cell(r.hawk)}${cell(r.dove)}</tr>`).join("") + "</tbody>";
+}
+
+function drawCharts() { chartIndex(); chartLatest(); chartScatter(); }
+kpis(); tableRecent(); tableAnalog();
+if (window.Plotly) drawCharts();
+else document.querySelectorAll(".chart").forEach(e => e.innerHTML = '<div class="empty">图表库加载失败</div>');
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => window.Plotly && drawCharts());
+</script>
+</body>
+</html>

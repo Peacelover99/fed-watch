@@ -1,0 +1,112 @@
+# 经济指标配置
+#
+# key:          指标代号（consensus.csv 里用这个名字录入预期）
+# fred_id:      FRED 序列 ID
+# transform:    level   = 原值
+#               pct_mom = 环比 %（100 * (x / 上期 - 1)）
+#               diff    = 环比变化量（如非农新增就业）
+# scale:        变换后再乘的系数（如初请从 人 → 千人）
+# decimals:     公布值通常的小数位。比较前先四舍五入，避免 0.349 vs 0.3 这种伪意外
+# hawkish_sign: +1 表示"高于预期 = 偏鹰"（通胀、就业强）；-1 表示"高于预期 = 偏鸽"（失业率、初请）
+# weight:       合成"意外指数"时的权重，美联储越看重权重越大
+# revisions:    是否把前值修正计入意外（非农尤其重要）
+# frequency:    monthly / weekly / quarterly
+
+indicators:
+  core_cpi:
+    name: 核心CPI 环比
+    fred_id: CPILFESL
+    transform: pct_mom
+    scale: 1
+    decimals: 1
+    unit: "%"
+    hawkish_sign: 1
+    weight: 3
+    revisions: false
+    frequency: monthly
+
+  cpi:
+    name: CPI 环比
+    fred_id: CPIAUCSL
+    transform: pct_mom
+    scale: 1
+    decimals: 1
+    unit: "%"
+    hawkish_sign: 1
+    weight: 2
+    revisions: false
+    frequency: monthly
+
+  core_pce:
+    name: 核心PCE 环比
+    fred_id: PCEPILFE
+    transform: pct_mom
+    scale: 1
+    decimals: 1
+    unit: "%"
+    hawkish_sign: 1
+    weight: 3
+    revisions: false
+    frequency: monthly
+
+  nfp:
+    name: 非农新增就业
+    fred_id: PAYEMS
+    transform: diff
+    scale: 1          # FRED 单位已是千人
+    decimals: 0
+    unit: "千人"
+    hawkish_sign: 1
+    weight: 3
+    revisions: true
+    frequency: monthly
+
+  unrate:
+    name: 失业率
+    fred_id: UNRATE
+    transform: level
+    scale: 1
+    decimals: 1
+    unit: "%"
+    hawkish_sign: -1
+    weight: 2
+    revisions: false
+    frequency: monthly
+
+  retail:
+    name: 零售销售 环比
+    fred_id: RSAFS
+    transform: pct_mom
+    scale: 1
+    decimals: 1
+    unit: "%"
+    hawkish_sign: 1
+    weight: 1
+    revisions: false
+    frequency: monthly
+
+  claims:
+    name: 初请失业金人数
+    fred_id: ICSA
+    transform: level
+    scale: 0.001      # 人 → 千人
+    decimals: 0
+    unit: "千人"
+    hawkish_sign: -1
+    weight: 1
+    revisions: false
+    frequency: weekly
+
+# 用于验证"市场是否认同这次意外"的市场序列（FRED）
+market:
+  yield_2y: DGS2        # 2 年期美债收益率，对政策预期最敏感
+  sp500: SP500
+  nasdaq: NASDAQCOM
+
+settings:
+  alert_threshold_z: 1.5     # |z| 超过这个值就推送
+  min_history: 6             # 至少有多少条历史意外才用"历史意外标准差"，否则用回退方法
+  index_half_life_days: 30   # 合成意外指数的半衰期
+  analog_min_count: 3        # 历史同类事件少于这个数就不展示统计
+  notify_minor: true         # true: 每次数据公布都推送（小意外用普通提醒）；false: 只推送 |z| 超阈值的
+  history_start: "2015-01-01"
