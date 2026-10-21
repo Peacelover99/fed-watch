@@ -64,8 +64,12 @@ class FredClient:
                 try:
                     r.json()
                 except ValueError:
+                    import re
                     ctype = r.headers.get("Content-Type", "?").split(";")[0]
-                    last_err = f"返回的不是数据（{ctype}，{len(r.content)} 字节），FRED 可能在维护"
+                    page = re.sub(r"<[^>]+>", " ", re.sub(r"(?is)<(script|style).*?</\1>", " ", r.text))
+                    page = re.sub(r"\s+", " ", page).strip()[:120]
+                    last_err = f"返回的不是数据（{ctype}，{len(r.content)} 字节），FRED 可能在维护" \
+                        + (f"。页面内容：{page}" if page else "")
                     time.sleep(3 * (attempt + 1))
                     continue
             return r
