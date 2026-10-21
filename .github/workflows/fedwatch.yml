@@ -14,6 +14,7 @@ on:
         type: boolean
         default: false
   push:
+    branches: [main]           # 只在 main 分支触发；发布 Release 打标签时不运行
     paths:
       - "data/consensus.csv"   # 录入新预期后自动重算
 
@@ -68,7 +69,8 @@ jobs:
         run: python -m fedwatch run
 
       - name: 保存数据和面板
-        if: ${{ !inputs.test_notify }}
+        # 只在 main 分支保存（在标签或其他分支上手动运行时跳过，避免推送失败）
+        if: ${{ !inputs.test_notify && github.ref == 'refs/heads/main' }}
         run: |
           git config user.name "fedwatch-bot"
           git config user.email "fedwatch-bot@users.noreply.github.com"
