@@ -17,6 +17,10 @@ API = "https://api.stlouisfed.org/fred"
 CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv"
 
 
+class FredUnavailable(RuntimeError):
+    """FRED 临时不可用（维护、5xx、返回空白/网页而不是数据、网络问题）。下一轮会自动重试。"""
+
+
 class FredClient:
     def __init__(self, api_key: Optional[str] = None, session: Optional[requests.Session] = None):
         key = api_key if api_key is not None else os.environ.get("FRED_API_KEY", "")
@@ -28,8 +32,9 @@ class FredClient:
         self.session = session or requests.Session()
         self._release_cache: dict[str, list[pd.Timestamp]] = {}
 
-    def _get(self, url: str, params: dict) -> requests.Response:
+    def _get(self, url: str, params: dict, want_json: bool = False) -> requests.Response:
         last_err = ""
+        transient = True
         endpoint = url.replace(API, "").replace(CSV, "fredgraph.csv")
         for attempt in range(3):
             try:
@@ -50,13 +55,24 @@ class FredClient:
                     msg = r.text[:200]
                 last_err = f"HTTP {r.status_code} {msg}".strip()
                 if r.status_code < 500:  # 4xx（如 key 无效）重试没用
+                    transient = False
                     break
                 time.sleep(1 + attempt)
                 continue
+            if want_json:
+                # FRED 维护或故障时会返回 200 + 空白/网页，而不是 JSON
+                try:
+                    r.json()
+                except ValueError:
+                    ctype = r.headers.get("Content-Type", "?").split(";")[0]
+                    last_err = f"返回的不是数据（{ctype}，{len(r.content)} 字节），FRED 可能在维护"
+                    time.sleep(3 * (attempt + 1))
+                    continue
             return r
         hint = "（请检查 FRED_API_KEY 是否正确：32 位小写字母和数字，不要带空格或引号）" \
             if "api_key" in last_err.lower() else ""
-        raise RuntimeError(f"FRED {endpoint} {params.get('series_id', '')}: {last_err}{hint}")
+        cls = FredUnavailable if transient else RuntimeError
+        raise cls(f"FRED {endpoint} {params.get('series_id', '')}: {last_err}{hint}")
 
     def series(self, series_id: str, start: str = "2000-01-01") -> pd.Series:
         """返回以观测日期为索引的 float 序列，缺失值已去掉。"""
@@ -65,6 +81,7 @@ class FredClient:
                 f"{API}/series/observations",
                 {"series_id": series_id, "api_key": self.api_key, "file_type": "json",
                  "observation_start": start},
+                want_json=True,
             )
             obs = r.json()["observations"]
             s = pd.Series(
@@ -90,12 +107,13 @@ class FredClient:
         if series_id in self._release_cache:
             return self._release_cache[series_id]
         r = self._get(f"{API}/series/release",
-                      {"series_id": series_id, "api_key": self.api_key, "file_type": "json"})
+                      {"series_id": series_id, "api_key": self.api_key, "file_type": "json"}, want_json=True)
         release_id = r.json()["releases"][0]["id"]
         r = self._get(
             f"{API}/release/dates",
             {"release_id": release_id, "api_key": self.api_key, "file_type": "json",
              "include_release_dates_with_no_data": "false", "sort_order": "asc", "limit": 10000},
+            want_json=True,
         )
         dates = sorted(pd.Timestamp(d["date"]) for d in r.json()["release_dates"])
         self._release_cache[series_id] = dates

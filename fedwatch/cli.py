@@ -33,8 +33,11 @@ def _print_report(rep) -> None:
         print("  错误:", e)
     if os.environ.get("GITHUB_ACTIONS") == "true":
         # 错误显示在 Actions 运行页面的 Annotations 里，不用点进日志
+        level = "warning" if rep.only_transient else "error"
+        if rep.only_transient:
+            print("::warning title=Fed Watch::FRED 暂时不可用，本轮跳过，下一轮会自动重试（数据不会丢）")
         for e in rep.errors:
-            print(f"::error title=Fed Watch::{e}")
+            print(f"::{level} title=Fed Watch::{e}")
         summary = os.environ.get("GITHUB_STEP_SUMMARY")
         if summary:
             with open(summary, "a", encoding="utf-8") as f:
@@ -43,7 +46,9 @@ def _print_report(rep) -> None:
                     f.write(f"- {a}\n")
                 if rep.errors:
                     f.write("\n**错误**\n\n" + "".join(f"- {e}\n" for e in rep.errors))
-    if rep.errors and rep.processed == 0:
+    if rep.only_transient:
+        print("（FRED 暂时不可用，下一轮会自动重试）")
+    elif rep.errors and rep.processed == 0:
         print("（全部失败，请检查网络或 FRED_API_KEY）")
     elif rep.errors:
         print("（部分指标失败，其余已正常处理）")
@@ -58,8 +63,41 @@ def cmd_run(args) -> int:
     store.save()
     build_dashboard(store.df, cfg, DOCS_DIR / "index.html")
     _print_report(rep)
-    # 所有指标都失败才算失败，让 Actions 标红
-    return 1 if rep.errors and rep.processed == 0 else 0
+    _outage_watch(rep, None if args.dry_run else notify.send)
+    # FRED 临时故障不算失败（下一轮自动重试，避免 GitHub 反复发失败邮件）；
+    # 配置或代码问题导致全部失败时才让 Actions 标红
+    if rep.errors and rep.processed == 0 and not rep.only_transient:
+        return 1
+    return 0
+
+
+def _outage_watch(rep, send) -> None:
+    """FRED 连续故障超过 3 小时，推送一次提醒；恢复后再推送一次。状态存在 data/state.json。"""
+    import json
+    path = DATA_DIR / "state.json"
+    try:
+        state = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    except ValueError:
+        state = {}
+    now = pd.Timestamp.now(tz="UTC")
+    down = rep.processed == 0 and rep.only_transient
+    since = state.get("fred_down_since")
+    changed = False
+    if down:
+        if not since:
+            state["fred_down_since"], changed = now.isoformat(), True
+        elif not state.get("fred_down_notified") and now - pd.Timestamp(since) > pd.Timedelta(hours=3):
+            if send:
+                send("⚠️ FRED 数据源连续故障",
+                     f"自 {pd.Timestamp(since).tz_convert('Asia/Shanghai'):%m-%d %H:%M}（北京时间）起无法获取数据，"
+                     "期间公布的数据暂时无法提醒。恢复后会自动补算并推送。")
+            state["fred_down_notified"], changed = True, True
+    elif since and rep.processed > 0:
+        if state.get("fred_down_notified") and send:
+            send("✅ FRED 数据源已恢复", "已恢复正常抓取，故障期间公布的数据会按正常流程补算。")
+        state, changed = {k: v for k, v in state.items() if not k.startswith("fred_down")}, True
+    if changed:
+        path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def cmd_backfill(args) -> int:

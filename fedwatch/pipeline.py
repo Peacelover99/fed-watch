@@ -13,6 +13,7 @@ import pandas as pd
 from . import market as mkt
 from . import surprise as sp
 from .config import Config, Indicator
+from .fred import FredUnavailable
 from .store import EventStore, find_consensus, load_snapshot, save_snapshot
 
 
@@ -30,6 +31,12 @@ class RunReport:
     alerts: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     missing_consensus: list[str] = field(default_factory=list)
+    transient: int = 0  # 其中属于"数据源临时不可用"的错误数
+
+    @property
+    def only_transient(self) -> bool:
+        """所有错误都是数据源临时故障（下一轮会自动重试），而不是配置或代码问题。"""
+        return bool(self.errors) and self.transient == len(self.errors)
 
 
 def _isnum(x) -> bool:
@@ -230,11 +237,13 @@ def run(src: Source, cfg: Config, store: EventStore, cons: pd.DataFrame, today: 
             process_indicator(ind, src, store, cons, cfg, today, lookback, send, report, save_snapshots)
         except Exception as e:  # noqa: BLE001 - 单个指标失败不影响其他
             report.errors.append(f"{ind.key}: {e}")
+            report.transient += isinstance(e, FredUnavailable)
             print(f"[错误] {ind.key}: {e}")
     try:
         refresh_market(store, src, cfg, send, report)
     except Exception as e:  # noqa: BLE001
         report.errors.append(f"market: {e}")
+        report.transient += isinstance(e, FredUnavailable)
         print(f"[错误] 市场数据: {e}")
     if report.missing_consensus and send is not None:
         send("⚠️ 有新数据但未录入预期",
